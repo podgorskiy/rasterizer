@@ -10,7 +10,7 @@ include_directories(${PYTHON_INCLUDE_DIR})
 include_directories(libs/)
 
 get_filename_component(PYTHON_LINK_DIR "${PYTHON_LIBRARY}" PATH)
-link_directories(${PYTHON_LINK_DIR})
+
 
 if(MSVC)
 	set(COMMON_OPTIONS /W3 /wd4996 /we4239 /we4002 /we4700 /we4305 /EHsc /MP /openmp )
@@ -67,8 +67,8 @@ endif ()
 
 FILE(GLOB CUDA_SOURCES "sources/*.cu")
 
-#LIST(APPEND CUDA_NVCC_FLAGS -O3 -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
-LIST(APPEND CUDA_NVCC_FLAGS -std=c++11; -Xcompiler "/openmp"; -G -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
+LIST(APPEND CUDA_NVCC_FLAGS -O3; -Xcompiler "/openmp"; -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
+#LIST(APPEND CUDA_NVCC_FLAGS -std=c++11; -Xcompiler "/openmp"; -G -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
 
 CUDA_ADD_LIBRARY(rasterizer_cuda ${CUDA_SOURCES})
 
