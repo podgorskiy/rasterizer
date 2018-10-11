@@ -57,10 +57,10 @@ public:
 	Rasterizer& operator=(const Context&) = delete;
 	Rasterizer(const Context&) = delete;
 
-	Rasterizer(int size_x, int size_y, int size_z)
+	Rasterizer(int size_x, int size_y, int size_z, int device)
 	{
 		int max_vector = 4096;
-		ctx = InitContext(max_vector, size_x, size_y, size_z);
+		ctx = InitContext(max_vector, size_x, size_y, size_z, device);
 	}
 
 	~Rasterizer()
@@ -158,7 +158,7 @@ PYBIND11_MODULE(rasterizer, m) {
 	m.doc() = "";
 
 	py::class_<Rasterizer>(m, "Rasterizer")
-		.def(py::init<int, int, int>())
+		.def(py::init<int, int, int, int>())
 		.def("Render", &Rasterizer::Render)
 		.def("Render2", &Rasterizer::Render2);
 }

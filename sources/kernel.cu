@@ -2,6 +2,17 @@
 #include "helper_math.h"
 #include "Context.h"
 
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
+{
+	if (code != cudaSuccess)
+	{
+		fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+		if (abort) exit(code);
+	}
+}
+
 __device__ float2 LineClosestPoint(float2 a, float2 b, float2 p)
 {
 	float2 ap = p - a;
@@ -61,16 +72,31 @@ __global__ void kernel(float* A, float* v, int stride)
 	A[j + i * gridDim.x * blockDim.x + k * gridDim.x * blockDim.x * gridDim.y * blockDim.y] = expf(-min_dist * min_dist / 2.0f);
 }
 
-Context InitContext(int stride, int size_x, int size_y, int size_z)
+
+DeviceGuard::DeviceGuard(int device)
+{
+	gpuErrchk(cudaGetDevice(&backup_device));
+	gpuErrchk(cudaSetDevice(device));
+}
+
+DeviceGuard::~DeviceGuard()
+{
+	gpuErrchk(cudaSetDevice(backup_device));
+}
+
+Context InitContext(int stride, int size_x, int size_y, int size_z, int device)
 {
 	Context ctx;
-	cudaMalloc(&ctx.vector_array, 2 * stride * size_z * sizeof(float));
+	ctx.device = device;
+	DeviceGuard cuda(ctx.device);
+
+	gpuErrchk(cudaMalloc(&ctx.vector_array, 2 * stride * size_z * sizeof(float)));
 	ctx.size_x = size_x;
 	ctx.size_y = size_y;
 	ctx.size_z = size_z;
 	ctx.stride = stride;
 
-	cudaMalloc(&ctx.raster_array, size_z * size_x * size_y * sizeof(float));
+	gpuErrchk(cudaMalloc(&ctx.raster_array, size_z * size_x * size_y * sizeof(float)));
 	ctx.raster_host = new float[size_z * size_x * size_y];
 	ctx.vector_host = new float[2 * stride * size_z];
 
@@ -79,14 +105,17 @@ Context InitContext(int stride, int size_x, int size_y, int size_z)
 
 void FreeContext(Context* ctx)
 {
-	cudaFree(ctx->vector_array);
-	cudaFree(ctx->raster_array);
+	DeviceGuard cuda(ctx->device);
+
+	gpuErrchk(cudaFree(ctx->vector_array));
+	gpuErrchk(cudaFree(ctx->raster_array));
 	delete[] ctx->raster_host;
+	delete[] ctx->vector_host;
 }
 
 void Render(Context* ctx, int count)
 {
-	cudaError_t cudaStatus = cudaSetDevice(0);
+	DeviceGuard cuda(ctx->device);
 
 	int threads_in_block_x = 8;
 	int threads_in_block_y = 8;
@@ -94,9 +123,11 @@ void Render(Context* ctx, int count)
 	int blocks_x = ctx->size_x / threads_in_block_x;
 	int blocks_y = ctx->size_y / threads_in_block_y;
 
-	cudaMemcpy(ctx->vector_array, ctx->vector_host, 2 * ctx->stride * count * sizeof(float), cudaMemcpyHostToDevice);
+	gpuErrchk(cudaMemcpy(ctx->vector_array, ctx->vector_host, 2 * ctx->stride * count * sizeof(float), cudaMemcpyHostToDevice));
 
 	kernel<<<dim3(blocks_x, blocks_y, count), dim3(threads_in_block_x, threads_in_block_y, 1)>>>(ctx->raster_array, ctx->vector_array, ctx->stride);
 
-	cudaMemcpy(ctx->raster_host, ctx->raster_array, count * ctx->size_x * ctx->size_y * sizeof(float), cudaMemcpyDeviceToHost);
+	gpuErrchk(cudaPeekAtLastError());
+
+	gpuErrchk(cudaMemcpy(ctx->raster_host, ctx->raster_array, count * ctx->size_x * ctx->size_y * sizeof(float), cudaMemcpyDeviceToHost));
 }
