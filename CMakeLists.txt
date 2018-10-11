@@ -4,7 +4,17 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(CUDA_tutorial1)
 
 FIND_PACKAGE(CUDA REQUIRED)
-find_package( PythonLibs 3.6 REQUIRED )
+
+set(PYTHON_EXECUTABLE /usr/bin/python3)
+
+#find_package( PythonLibs 3.5.5 REQUIRED )
+
+set(PYTHON_INCLUDE_DIR /usr/include/python3.5m)
+set(PYTHON_LIBRARY /usr/lib/libpython3.5m.so)
+
+message(${PYTHON_INCLUDE_DIR})
+message(${PYTHON_LIBRARY})
+
 
 include_directories(${PYTHON_INCLUDE_DIR})
 include_directories(libs/)
@@ -15,9 +25,9 @@ get_filename_component(PYTHON_LINK_DIR "${PYTHON_LIBRARY}" PATH)
 if(MSVC)
 	set(COMMON_OPTIONS /W3 /wd4996 /we4239 /we4002 /we4700 /we4305 /EHsc /MP /openmp )
 	set(DEBUG_OPTIONS /Od /Zi)
-	set(RELEASE_OPTIONS /Ox /fp:fast /GL /GR-)
+	set(RELEASE_OPTIONS /Ox /fp:fast /GL /GR- /MT)
 else()
-	set(COMMON_OPTIONS -flto -ffast-math -fopenmp -m64)
+	set(COMMON_OPTIONS -flto -ffast-math -fopenmp -m64 -fPIC)
 	set(DEBUG_OPTIONS -O0 -g)
 	set(RELEASE_OPTIONS -funroll-loops -march=native -mfpmath=sse)
 endif()
@@ -67,14 +77,25 @@ endif ()
 
 FILE(GLOB CUDA_SOURCES "sources/*.cu")
 
-LIST(APPEND CUDA_NVCC_FLAGS -O3; -Xcompiler "/openmp"; -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
-#LIST(APPEND CUDA_NVCC_FLAGS -std=c++11; -Xcompiler "/openmp"; -G -v;-gencode arch=compute_61,code=sm_61;-use_fast_math)
+
+if(MSVC)
+	set(XComplier_OPTIONS /Ox,/fp:fast,/GL,/GR-,/MT,/openmp)
+else()
+	set(XComplier_OPTIONS -O3,-funroll-loops,-march=native,-mfpmath=sse,-fPIC)
+endif()
+
+LIST(APPEND CUDA_NVCC_FLAGS -std=c++11; -O3; -Xcompiler "${XComplier_OPTIONS}" ; -v; -gencode arch=compute_61,code=sm_61; -use_fast_math)
+
 
 CUDA_ADD_LIBRARY(rasterizer_cuda ${CUDA_SOURCES})
 
 file(GLOB_RECURSE SOURCES sources/*.cpp sources/*.h)
 
+
 add_library(rasterizer SHARED ${SOURCES})
-set_target_properties(rasterizer PROPERTIES SUFFIX ".pyd")
+if(MSVC)
+	set_target_properties(rasterizer PROPERTIES SUFFIX ".pyd")
+endif()
+SET_TARGET_PROPERTIES(rasterizer PROPERTIES PREFIX "")
 
 target_link_libraries(rasterizer rasterizer_cuda ${PYTHON_LIBRARY})

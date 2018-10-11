@@ -70,10 +70,12 @@ public:
 
 	py::array_t<float, py::array::c_style> Render(std::vector<std::vector<py::array_t<float, py::array::c_style> > > x)
 	{
+		py::gil_scoped_release release;
+
 		for (int i = 0, l = x.size(); i < l; ++i)
 		{
-			float* dst_x = ctx.vector_host + ctx.stride * 2 * i;
-			float* dst_y = ctx.vector_host + ctx.stride * (2 * i + 1);
+			float* __restrict dst_x = ctx.vector_host + ctx.stride * 2 * i;
+			float* __restrict dst_y = ctx.vector_host + ctx.stride * (2 * i + 1);
 
 			for (int j = 0, m = x[i].size(); j < m; ++j)
 			{
@@ -85,19 +87,6 @@ public:
 
 				const float* __restrict data_x = p.data(0, 0);
 				const float* __restrict data_y = p.data(1, 0);
-
-				/*
-				for (int k = 0; k < w; ++k)
-				{
-					printf("%f ", data_x[k]);
-				}
-				printf("\n");
-				for (int k = 0; k < w; ++k)
-				{
-					printf("%f ", data_y[k]);
-				}
-				printf("\n");
-				*/
 
 				memcpy(dst_x, data_x, w * sizeof(float));
 				memcpy(dst_y, data_y, w * sizeof(float));
@@ -125,6 +114,40 @@ public:
 			ctx.raster_host);
 	}
 
+	py::array_t<float, py::array::c_style> Render2(std::vector<py::array_t<float, py::array::c_style> > x)
+	{
+		py::gil_scoped_release release;
+
+		for (int i = 0, l = x.size(); i < l; ++i)
+		{
+			py::array_t<float, py::array::c_style>& vec = x[i];
+
+			auto p = vec.unchecked<2>();
+			int w = (int)p.shape(1);
+			int h = (int)p.shape(0);
+
+			float* __restrict dst_x = ctx.vector_host + ctx.stride * 2 * i;
+			float* __restrict dst_y = ctx.vector_host + ctx.stride * (2 * i + 1);
+
+			const float* __restrict data_x = p.data(0, 0);
+			const float* __restrict data_y = p.data(1, 0);
+
+			memcpy(dst_x, data_x, w * sizeof(float));
+			memcpy(dst_y, data_y, w * sizeof(float));
+
+			dst_x += w;
+			dst_y += w;
+
+			*dst_x = -1;
+			*dst_y = -1;
+		}
+
+		::Render(&ctx, x.size());
+
+		return py::array_t<float>(
+			std::vector<uint64_t>{ (uint64_t)x.size(), (uint64_t)ctx.size_y, (uint64_t)ctx.size_x },
+			ctx.raster_host);
+	}
 
 private:
 	Context ctx;
@@ -136,5 +159,6 @@ PYBIND11_MODULE(rasterizer, m) {
 
 	py::class_<Rasterizer>(m, "Rasterizer")
 		.def(py::init<int, int, int>())
-		.def("Render", &Rasterizer::Render);
+		.def("Render", &Rasterizer::Render)
+		.def("Render2", &Rasterizer::Render2);
 }
