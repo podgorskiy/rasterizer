@@ -70,8 +70,6 @@ public:
 
 	py::array_t<float, py::array::c_style> Render(std::vector<std::vector<py::array_t<float, py::array::c_style> > > x)
 	{
-		py::gil_scoped_release release;
-
 		for (int i = 0, l = x.size(); i < l; ++i)
 		{
 			float* __restrict dst_x = ctx.vector_host + ctx.stride * 2 * i;
@@ -88,26 +86,33 @@ public:
 				const float* __restrict data_x = p.data(0, 0);
 				const float* __restrict data_y = p.data(1, 0);
 
-				memcpy(dst_x, data_x, w * sizeof(float));
-				memcpy(dst_y, data_y, w * sizeof(float));
-				
-				if (j != m-1)
 				{
-					dst_x[w] = dst_x[w - 1];
-					dst_y[w] = dst_y[w - 1];
+					py::gil_scoped_release release;
+					
+					memcpy(dst_x, data_x, w * sizeof(float));
+					memcpy(dst_y, data_y, w * sizeof(float));
 
-					++dst_x;
-					++dst_y;
+					if (j != m - 1)
+					{
+						dst_x[w] = dst_x[w - 1];
+						dst_y[w] = dst_y[w - 1];
+
+						++dst_x;
+						++dst_y;
+					}
+
+					dst_x += w;
+					dst_y += w;
 				}
-
-				dst_x += w;
-				dst_y += w;
 			}
 			*dst_x = -1;
 			*dst_y = -1;
 		}
 
-		::Render(&ctx, x.size());
+		{
+			py::gil_scoped_release release;
+			::Render(&ctx, x.size());
+		}
 
 		return py::array_t<float>(
 			std::vector<uint64_t>{ (uint64_t)x.size(), (uint64_t)ctx.size_y, (uint64_t)ctx.size_x },
@@ -116,8 +121,6 @@ public:
 
 	py::array_t<float, py::array::c_style> Render2(std::vector<py::array_t<float, py::array::c_style> > x)
 	{
-		py::gil_scoped_release release;
-
 		for (int i = 0, l = x.size(); i < l; ++i)
 		{
 			py::array_t<float, py::array::c_style>& vec = x[i];
@@ -126,23 +129,29 @@ public:
 			int w = (int)p.shape(1);
 			int h = (int)p.shape(0);
 
-			float* __restrict dst_x = ctx.vector_host + ctx.stride * 2 * i;
-			float* __restrict dst_y = ctx.vector_host + ctx.stride * (2 * i + 1);
-
 			const float* __restrict data_x = p.data(0, 0);
 			const float* __restrict data_y = p.data(1, 0);
 
-			memcpy(dst_x, data_x, w * sizeof(float));
-			memcpy(dst_y, data_y, w * sizeof(float));
+			{
+				py::gil_scoped_release release;
 
-			dst_x += w;
-			dst_y += w;
+				float* __restrict dst_x = ctx.vector_host + ctx.stride * 2 * i;
+				float* __restrict dst_y = ctx.vector_host + ctx.stride * (2 * i + 1);
 
-			*dst_x = -1;
-			*dst_y = -1;
+				memcpy(dst_x, data_x, w * sizeof(float));
+				memcpy(dst_y, data_y, w * sizeof(float));
+
+				dst_x += w;
+				dst_y += w;
+
+				*dst_x = -1;
+				*dst_y = -1;
+			}
 		}
-
-		::Render(&ctx, x.size());
+		{
+			py::gil_scoped_release release;
+			::Render(&ctx, x.size());
+		}
 
 		return py::array_t<float>(
 			std::vector<uint64_t>{ (uint64_t)x.size(), (uint64_t)ctx.size_y, (uint64_t)ctx.size_x },
