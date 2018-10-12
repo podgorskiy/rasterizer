@@ -1,6 +1,7 @@
 ﻿#include <cuda.h>
 #include "helper_math.h"
 #include "Context.h"
+#include <stdio.h>
 
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
